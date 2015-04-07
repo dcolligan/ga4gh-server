@@ -22,7 +22,7 @@ First, we install some basic pre-requisite packages:
 
 .. code-block:: bash
 
-  $ sudo apt-get install python-dev zlib1g-dev
+  $ sudo apt-get install python-dev zlib1g-dev python-virtualenv
 
 Install Apache and mod_wsgi, and enable mod_wsgi:
 
