@@ -213,6 +213,8 @@ def handleException(exception):
     Handles an exception that occurs somewhere in the process of handling
     a request.
     """
+    import traceback
+    print(traceback.format_exc())
     if app.config['DEBUG']:
         app.log_exception(exception)
     serverException = exception
