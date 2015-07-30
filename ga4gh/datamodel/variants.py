@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 
 import datetime
 import random
+import hashlib
 
 import pysam
 
@@ -45,6 +46,17 @@ def convertVCFGenotype(vcfGenotype, vcfPhaseset):
         genotype = [-1]
 
     return genotype, phaseset
+
+
+class CompoundVariantId(datamodel.CompoundId):
+    """
+    The compound id for a variant
+    """
+    fields = ['datasetId', 'vsId', 'chrom', 'pos', 'md5']
+    comboFields = {
+        'variantSetId': [0, 1],
+        'variantId': [2, 3, 4],
+    }
 
 
 class CallSet(object):
@@ -414,6 +426,28 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
                     record.id, name, call, genotypeData))  # REPLACE
             sampleIterator += 1  # REMOVAL
         return variant
+
+    def getVariant(self, compoundId):
+        if compoundId.chrom in self._chromFileMap:
+            varFileName = self._chromFileMap[compoundId.chrom]
+        else:
+            raise exceptions.ObjectNotFoundException(compoundId)
+        pos = int(compoundId.pos)
+        referenceName, startPosition, endPosition = \
+            self.sanitizeVariantFileFetch(
+                compoundId.chrom, pos, None)
+        # TODO vcf.fetch's startPosition arg seems to be exclusive,
+        # not inclusive!!!
+        startPosition = startPosition - 0.1
+        cursor = self.getFileHandle(varFileName).fetch(
+            referenceName, startPosition, endPosition)
+        for record in cursor:
+            if pos != record.pos:
+                continue
+            digest = hashlib.md5(record.ref + str(record.alts)).hexdigest()
+            if digest == compoundId.md5:
+                return self.convertVariant(record, [])
+        raise exceptions.ObjectNotFoundException(compoundId)
 
     def getVariants(self, referenceName, startPosition, endPosition,
                     variantName=None, callSetIds=None):

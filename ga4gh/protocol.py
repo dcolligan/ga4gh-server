@@ -26,6 +26,17 @@ def convertDatetime(t):
     return int(millis)
 
 
+class ProtocolException(Exception):
+    """
+    Something went wrong in the protocol module
+    """
+
+
+class UnableToDecodeJsonException(Exception):
+    def __init__(self, jsonString):
+        self.message = "Unable to decode JSON: '{}'".format(jsonString)
+
+
 class SearchResponseBuilder(object):
     """
     A class to allow sequential building of SearchResponse objects.
@@ -188,7 +199,10 @@ class ProtocolElement(object):
         """
         Returns a decoded ProtocolElement from the specified JSON string.
         """
-        jsonDict = json.loads(jsonStr)
+        try:
+            jsonDict = json.loads(jsonStr)
+        except ValueError:
+            raise UnableToDecodeJsonException(jsonStr)
         return cls.fromJsonDict(jsonDict)
 
     @classmethod

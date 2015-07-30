@@ -27,6 +27,46 @@ def _cleanupHtslibsMess(indexDir):
         shutil.rmtree(indexDir)
 
 
+class CompoundId(object):
+    """
+    Base class for compoundIds
+    """
+    separator = ':'
+    fields = []
+    comboFields = {}
+
+    def __init__(self, compoundIdStr):
+        try:
+            splits = compoundIdStr.split(self.separator)
+        except AttributeError:
+            raise exceptions.BadIdentifierException(
+                compoundIdStr, self._getParseErrorMessage())
+        if len(splits) != len(self.fields):
+            raise exceptions.BadIdentifierException(
+                compoundIdStr, self._getParseErrorMessage())
+        for i, field in enumerate(self.fields):
+            setattr(self, field, splits[i])
+        for comboFieldName, comboFieldOrder in self.comboFields.items():
+            values = []
+            for i in comboFieldOrder:
+                value = getattr(self, self.fields[i])
+                values.append(value)
+            comboFieldValue = self.separator.join(values)
+            setattr(self, comboFieldName, comboFieldValue)
+
+    def __str__(self):
+        values = []
+        for field in self.fields:
+            value = getattr(self, field)
+            values.append(value)
+        return self.separator.join(values)
+
+    def _getParseErrorMessage(self):
+        idFormat = self.separator.join(self.fields)
+        msg = "(id must be in format {})".format(idFormat)
+        return msg
+
+
 class PysamFileHandleCache(object):
     """
     Cache for opened file handles. We use a deque which has the

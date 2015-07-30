@@ -306,7 +306,6 @@ class TestFrontend(unittest.TestCase):
         ]
         pathsNotImplementedGet = [
             '/callsets/<id>',
-            '/variants/<id>',
             '/datasets/<id>',
             '/readgroupsets/<id>',
             '/readgroups/<id>',
