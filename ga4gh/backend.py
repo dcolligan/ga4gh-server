@@ -247,7 +247,7 @@ class AbstractBackend(object):
     def _getDatasetFromCompoundId(self, compoundId):
         if compoundId is None:
             raise exceptions.BadIdentifierException(compoundId)
-        if not hasattr(compoundId, 'split'):
+        if not isinstance(compoundId, basestring):
             raise exceptions.BadIdentifierException(compoundId)
         splits = compoundId.split(':')
         datasetId = _safeMapQuery(

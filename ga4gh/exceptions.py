@@ -126,7 +126,7 @@ class BadPageTokenException(BadRequestException):
 class BadIdentifierException(BadRequestException):
     def __init__(self, id_, msg=None):
         self.message = "The identifier provided is invalid: '{}' ".format(id_)
-        if msg:
+        if msg is not None:
             self.message += msg
 
 

@@ -281,6 +281,8 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
     Class representing a single variant set backed by a directory of indexed
     VCF or BCF files.
     """
+    posDiff = 1
+
     def __init__(self, id_, dataDir):
         super(HtslibVariantSet, self).__init__(id_)
         self._dataDir = dataDir
@@ -386,6 +388,13 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
                 call.info[key] = _encodeValue(value)
         return call
 
+    def hashVariant(self, record):
+        """
+        Produces an MD5 hash of the pysam variant record to uniquely
+        identify it
+        """
+        return hashlib.md5(record.ref + str(record.alts)).hexdigest()
+
     def convertVariant(self, record, callSetIds):
         """
         Converts the specified pysam variant record into a GA4GH Variant
@@ -433,18 +442,17 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         else:
             raise exceptions.ObjectNotFoundException(compoundId)
         pos = int(compoundId.pos)
+        # fetch pos is exclusive, not inclusive
+        startPosition = pos - self.posDiff
         referenceName, startPosition, endPosition = \
             self.sanitizeVariantFileFetch(
-                compoundId.chrom, pos, None)
-        # TODO vcf.fetch's startPosition arg seems to be exclusive,
-        # not inclusive!!!
-        startPosition = startPosition - 0.1
+                compoundId.chrom, startPosition, None)
         cursor = self.getFileHandle(varFileName).fetch(
             referenceName, startPosition, endPosition)
         for record in cursor:
             if pos != record.pos:
                 continue
-            digest = hashlib.md5(record.ref + str(record.alts)).hexdigest()
+            digest = self.hashVariant(record)
             if digest == compoundId.md5:
                 return self.convertVariant(record, [])
         raise exceptions.ObjectNotFoundException(compoundId)

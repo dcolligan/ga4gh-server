@@ -106,8 +106,11 @@ class HttpClient(object):
         try:
             responseObject = protocolResponseClass.fromJsonString(
                 jsonResponseString)
-        except protocol.UnableToDecodeJsonException:
-            raise EmptyResponse()
+        except protocol.UnableToDecodeJsonException as exception:
+            if jsonResponseString == '':
+                raise EmptyResponse()
+            else:
+                raise exception
         return responseObject
 
     def _updateNotDone(self, responseObject, protocolRequest):

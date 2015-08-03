@@ -36,11 +36,10 @@ class CompoundId(object):
     comboFields = {}
 
     def __init__(self, compoundIdStr):
-        try:
-            splits = compoundIdStr.split(self.separator)
-        except AttributeError:
+        if not isinstance(compoundIdStr, basestring):
             raise exceptions.BadIdentifierException(
                 compoundIdStr, self._getParseErrorMessage())
+        splits = compoundIdStr.split(self.separator)
         if len(splits) != len(self.fields):
             raise exceptions.BadIdentifierException(
                 compoundIdStr, self._getParseErrorMessage())
