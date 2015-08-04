@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 
 import os
 import glob
+import hashlib
 
 import vcf
 
@@ -309,9 +310,6 @@ class VariantSetTest(datadriven.DataDrivenTest):
             self.assertTrue(self._pyvcfVariantIsInGaVarants(
                 variant, variantEnd-1, variantEnd+1))
 
-    def testVariantFromToInRange(self):
-        pass
-
     def testVariantSetMetadata(self):
         def convertPyvcfNumber(number):
             if number == -1:
@@ -348,3 +346,21 @@ class VariantSetTest(datadriven.DataDrivenTest):
         testMetaLength = (
             1 + len(self._formats) + len(self._infos) - gtCounter)
         self.assertEqual(len(keyMap), testMetaLength)
+
+    def testGetVariant(self):
+        variantSet = self._gaObject
+        for referenceName in self._referenceNames:
+            refnameVariants = self._getPyvcfVariants(referenceName)
+            for variant in refnameVariants:
+                md5 = self._hashVariant(variant)
+                compoundId = variants.CompoundVariantId.compose(
+                    variantSetId=variantSet.getId(),
+                    referenceName=referenceName,
+                    start=variant.start,
+                    md5=md5)
+                gotVariant = variantSet.getVariant(compoundId)
+                self.assertEqual(str(compoundId), gotVariant.id)
+
+    def _hashVariant(self, record):
+        alts = tuple([str(substitution) for substitution in record.ALT])
+        return hashlib.md5(record.REF + str(alts)).hexdigest()
