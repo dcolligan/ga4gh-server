@@ -29,7 +29,8 @@ def _cleanupHtslibsMess(indexDir):
 
 class CompoundId(object):
     """
-    Base class for compoundIds
+    Base class for an id composed of several different parts, separated
+    by a separator.
     """
     separator = ':'
     fields = []

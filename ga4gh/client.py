@@ -103,14 +103,8 @@ class HttpClient(object):
         jsonResponseString = response.text
         self._updateBytesRead(jsonResponseString)
         self._debugResponse(jsonResponseString)
-        try:
-            responseObject = protocolResponseClass.fromJsonString(
-                jsonResponseString)
-        except protocol.UnableToDecodeJsonException as exception:
-            if jsonResponseString == '':
-                raise EmptyResponse()
-            else:
-                raise exception
+        responseObject = protocolResponseClass.fromJsonString(
+            jsonResponseString)
         return responseObject
 
     def _updateNotDone(self, responseObject, protocolRequest):

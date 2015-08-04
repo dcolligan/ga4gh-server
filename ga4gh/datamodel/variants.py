@@ -52,7 +52,7 @@ class CompoundVariantId(datamodel.CompoundId):
     """
     The compound id for a variant
     """
-    fields = ['datasetId', 'vsId', 'chrom', 'pos', 'md5']
+    fields = ['datasetId', 'vsId', 'referenceName', 'start', 'md5']
     comboFields = {
         'variantSetId': [0, 1],
         'variantId': [2, 3, 4],
@@ -281,7 +281,7 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
     Class representing a single variant set backed by a directory of indexed
     VCF or BCF files.
     """
-    posDiff = 1
+    startDiff = 1
 
     def __init__(self, id_, dataDir):
         super(HtslibVariantSet, self).__init__(id_)
@@ -437,20 +437,20 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         return variant
 
     def getVariant(self, compoundId):
-        if compoundId.chrom in self._chromFileMap:
-            varFileName = self._chromFileMap[compoundId.chrom]
+        if compoundId.referenceName in self._chromFileMap:
+            varFileName = self._chromFileMap[compoundId.referenceName]
         else:
             raise exceptions.ObjectNotFoundException(compoundId)
-        pos = int(compoundId.pos)
-        # fetch pos is exclusive, not inclusive
-        startPosition = pos - self.posDiff
+        start = int(compoundId.start)
+        # fetch start is exclusive, not inclusive
+        startPosition = start - self.startDiff
         referenceName, startPosition, endPosition = \
             self.sanitizeVariantFileFetch(
-                compoundId.chrom, startPosition, None)
+                compoundId.referenceName, startPosition, None)
         cursor = self.getFileHandle(varFileName).fetch(
             referenceName, startPosition, endPosition)
         for record in cursor:
-            if pos != record.pos:
+            if start != record.start:
                 continue
             digest = self.hashVariant(record)
             if digest == compoundId.md5:
