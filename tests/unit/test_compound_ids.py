@@ -39,6 +39,19 @@ class TestCompoundIds(unittest.TestCase):
         self.assertEqual(compoundId.baz, 'c')
         self.assertEqual(compoundId.bazfoo, 'c;a')
 
+    def testCompose(self):
+        compoundId = ExampleCompoundId.compose(bar=5, bazfoo='c;a')
+        compoundIdStr = str(compoundId)
+        self.assertEqual(compoundIdStr, 'a;5;c')
+        self.assertEqual(compoundId.__class__, ExampleCompoundId)
+
+    def testComposeFail(self):
+        with self.assertRaises(ValueError):
+            ExampleCompoundId.compose(notValid='invalidKey')
+        with self.assertRaises(AssertionError):
+            ExampleCompoundId.compose(bazfoo='too;many;entries')
+
+
     def testCompoundVariantId(self):
         compoundId = variants.CompoundVariantId('a:b:c:d:e')
         self.assertEqual(compoundId.datasetId, 'a')

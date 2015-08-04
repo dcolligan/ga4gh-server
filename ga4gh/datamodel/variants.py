@@ -211,6 +211,15 @@ class SimulatedVariantSet(AbstractVariantSet):
         ret = []
         return ret
 
+    def getVariant(self, compoundId):
+        randomNumberGenerator = random.Random()
+        start = int(compoundId.start)
+        randomNumberGenerator.seed(self._randomSeed + start)
+        variant = self.generateVariant(
+            self._id, compoundId.referenceName, start,
+            randomNumberGenerator)
+        return variant
+
     def getVariants(self, referenceName, startPosition, endPosition,
                     variantName=None, callSetIds=None):
         randomNumberGenerator = random.Random()

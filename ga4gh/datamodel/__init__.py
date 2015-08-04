@@ -36,23 +36,47 @@ class CompoundId(object):
     fields = []
     comboFields = {}
 
-    def __init__(self, compoundIdStr):
-        if not isinstance(compoundIdStr, basestring):
-            raise exceptions.BadIdentifierException(
-                compoundIdStr, self._getParseErrorMessage())
-        splits = compoundIdStr.split(self.separator)
-        if len(splits) != len(self.fields):
-            raise exceptions.BadIdentifierException(
-                compoundIdStr, self._getParseErrorMessage())
-        for i, field in enumerate(self.fields):
-            setattr(self, field, splits[i])
-        for comboFieldName, comboFieldOrder in self.comboFields.items():
-            values = []
-            for i in comboFieldOrder:
-                value = getattr(self, self.fields[i])
-                values.append(value)
-            comboFieldValue = self.separator.join(values)
-            setattr(self, comboFieldName, comboFieldValue)
+    @classmethod
+    def compose(cls, **kwargs):
+        compoundId = cls(None, _skipInstantiation=True)
+        validFields = set()
+        for field in cls.fields:
+            validFields.add(field)
+        comboKeys = cls.comboFields.keys()
+        for key, value in kwargs.items():
+            if key in validFields:
+                setattr(compoundId, key, str(value))
+            elif key in comboKeys:
+                setattr(compoundId, key, value)
+                fieldIndexes = cls.comboFields[key]
+                splits = value.split(cls.separator)
+                assert len(fieldIndexes) == len(splits)
+                for i in range(len(splits)):
+                    field = cls.fields[fieldIndexes[i]]
+                    setattr(compoundId, field, splits[i])
+            else:
+                msg = "field '{}' not in fields of {}; options are: {}"
+                raise ValueError(msg.format(key, cls.__name__, cls.fields))
+        return compoundId
+
+    def __init__(self, compoundIdStr, _skipInstantiation=False):
+        if not _skipInstantiation:
+            if not isinstance(compoundIdStr, basestring):
+                raise exceptions.BadIdentifierException(
+                    compoundIdStr, self._getParseErrorMessage())
+            splits = compoundIdStr.split(self.separator)
+            if len(splits) != len(self.fields):
+                raise exceptions.BadIdentifierException(
+                    compoundIdStr, self._getParseErrorMessage())
+            for i, field in enumerate(self.fields):
+                setattr(self, field, str(splits[i]))
+            for comboFieldName, comboFieldOrder in self.comboFields.items():
+                values = []
+                for i in comboFieldOrder:
+                    value = getattr(self, self.fields[i])
+                    values.append(str(value))
+                comboFieldValue = self.separator.join(values)
+                setattr(self, comboFieldName, comboFieldValue)
 
     def __str__(self):
         values = []
