@@ -50,7 +50,11 @@ class CompoundId(object):
                 setattr(compoundId, key, value)
                 fieldIndexes = cls.comboFields[key]
                 splits = value.split(cls.separator)
-                assert len(fieldIndexes) == len(splits)
+                if len(fieldIndexes) != len(splits):
+                    msg = ("field '{}' with value '{}' has {} split(s), "
+                           "needs {}")
+                    raise ValueError(msg.format(
+                        key, value, len(splits), len(fieldIndexes)))
                 for i in range(len(splits)):
                     field = cls.fields[fieldIndexes[i]]
                     setattr(compoundId, field, splits[i])

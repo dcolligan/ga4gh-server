@@ -48,7 +48,7 @@ class TestCompoundIds(unittest.TestCase):
     def testComposeFail(self):
         with self.assertRaises(ValueError):
             ExampleCompoundId.compose(notValid='invalidKey')
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             ExampleCompoundId.compose(bazfoo='too;many;entries')
 
     def testCompoundVariantId(self):

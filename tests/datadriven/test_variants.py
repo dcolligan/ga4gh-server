@@ -12,6 +12,7 @@ import vcf
 
 import ga4gh.protocol as protocol
 import ga4gh.datamodel.variants as variants
+import ga4gh.datamodel as datamodel
 import tests.datadriven as datadriven
 import tests.utils as utils
 
@@ -29,7 +30,9 @@ class VariantSetTest(datadriven.DataDrivenTest):
     built by the variants.VariantSet object.
     """
     def __init__(self, variantSetId, baseDir):
-        super(VariantSetTest, self).__init__(variantSetId, baseDir)
+        compoundId = 'dataset1:{}'.format(variantSetId)
+        super(VariantSetTest, self).__init__(
+            variantSetId, baseDir, compoundId)
         self._variantRecords = []
         self._referenceNames = set()
         # Read in all the VCF files in datadir and store each variant.
@@ -165,7 +168,7 @@ class VariantSetTest(datadriven.DataDrivenTest):
         gaCallSetVariants = []
         gaId = self._gaObject.getId()
         for referenceName in self._referenceNames:
-            end = 2**30  # TODO This is arbitrary, and pysam can choke. FIX!
+            end = datamodel.PysamDatamodelMixin.vcfMax
             gaSearchId = ["{}.{}".format(
                 gaId, sampleId) for sampleId in searchsampleIds]
             gaVariants = list(self._gaObject.getVariants(
