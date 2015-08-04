@@ -243,8 +243,13 @@ class SimulatedVariantSet(AbstractVariantSet):
         variant = self._createGaVariant()
         variant.names = []
         variant.referenceName = referenceName
-        variant.id = "{0}:{1}:{2}".format(
-            variant.variantSetId, referenceName, position)
+        md5 = 'notApplicable'
+        compoundId = CompoundVariantId.compose(
+            variantSetId=variant.variantSetId,
+            referenceName=referenceName,
+            start=position,
+            md5=md5)
+        variant.id = str(compoundId)
         variant.start = position
         variant.end = position + 1  # SNPs only for now
         bases = ["A", "C", "G", "T"]
@@ -413,9 +418,13 @@ class HtslibVariantSet(datamodel.PysamDatamodelMixin, AbstractVariantSet):
         variant = self._createGaVariant()
         # N.B. record.pos is 1-based
         #      also consider using record.start-record.stop
-        variant.id = "{0}:{1}:{2}".format(self._id,
-                                          record.contig,
-                                          record.pos)
+        md5 = self.hashVariant(record)
+        compoundId = CompoundVariantId.compose(
+            variantSetId=self._id,
+            referenceName=record.contig,
+            start=record.pos,
+            md5=md5)
+        variant.id = str(compoundId)
         variant.referenceName = record.contig
         if record.id is not None:
             variant.names = record.id.split(';')

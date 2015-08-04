@@ -41,7 +41,7 @@ class TestFrontend(unittest.TestCase):
     def tearDownClass(cls):
         cls.app = None
 
-    ### send request helper methods ###
+    # -------------- send request helper methods --------------------
 
     def sendPostRequest(self, path, request):
         """
@@ -159,7 +159,7 @@ class TestFrontend(unittest.TestCase):
         response = self.sendListRequest(path, request)
         return response
 
-    ### other helper methods ###
+    # -------------- other helper methods --------------------
 
     def verifySearchRouting(self, path, getDefined=False):
         """
@@ -186,7 +186,7 @@ class TestFrontend(unittest.TestCase):
         # OPTIONS should return success
         self.assertEqual(200, self.app.options(versionedPath).status_code)
 
-    ### test methods ###
+    # -------------- test methods --------------------
 
     def test404sReturnJson(self):
         paths = [

@@ -51,7 +51,6 @@ class TestCompoundIds(unittest.TestCase):
         with self.assertRaises(AssertionError):
             ExampleCompoundId.compose(bazfoo='too;many;entries')
 
-
     def testCompoundVariantId(self):
         compoundId = variants.CompoundVariantId('a:b:c:d:e')
         self.assertEqual(compoundId.datasetId, 'a')
