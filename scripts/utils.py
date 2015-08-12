@@ -6,12 +6,15 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
+import ftplib
 import functools
 import os
 import shlex
 import subprocess
 import sys
 import time
+import urlparse
+import zlib
 
 import humanize
 import requests
@@ -21,6 +24,36 @@ import pysam
 
 def log(message):
     print(message)
+
+
+class Retry(object):
+    """
+    A decorator that attempts to perform an action numAttempts times before
+    giving up
+    """
+    def __init__(self, numAttempts, expectedExceptions):
+        self.numAttempts = numAttempts
+        self.expectedExceptions = expectedExceptions
+
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            triesLeft = self.numAttempts
+            savedException = None
+            success = False
+            while triesLeft > 0:
+                try:
+                    result = func(*args, **kwargs)
+                    success = True
+                    break
+                except self.expectedExceptions as exception:
+                    savedException = exception
+                    triesLeft -= 1
+                    log("({} tries left)".format(triesLeft))
+            if not success:
+                raise savedException
+            return result
+        return wrapper
 
 
 class Timed(object):
@@ -40,39 +73,32 @@ class Timed(object):
     def _report(self):
         delta = self.end - self.start
         timeString = humanize.time.naturaldelta(delta)
-        log("Finished in {} ({} seconds)".format(timeString, delta))
+        log("Finished in {} ({:.2f} seconds)".format(timeString, delta))
 
 
 class FileDownloader(object):
     """
-    Provides a wget-like file download and terminal display
+    Base class for file downloaders of different protocols
     """
-    defaultChunkSize = 1048576  # 1MB
     defaultStream = sys.stdout
 
-    def __init__(self, url, path, chunkSize=defaultChunkSize,
-                 stream=defaultStream):
+    def __init__(self, url, path, stream=defaultStream):
         self.url = url
         self.path = path
         self.basename = os.path.basename(url)
         self.basenameLength = len(self.basename)
-        self.chunkSize = chunkSize
         self.stream = stream
-        self.bytesWritten = 0
+        self.bytesReceived = 0
         self.displayIndex = 0
         self.displayWindowSize = 20
+        self.fileSize = None
+        self.displayCounter = 0
 
-    def download(self):
+    def _printStartDownloadMessage(self):
         self.stream.write("Downloading '{}' to '{}'\n".format(
             self.url, self.path))
-        response = requests.get(self.url, stream=True)
-        response.raise_for_status()
-        self.contentLength = int(response.headers['content-length'])
-        with open(self.path, 'wb') as outputFile:
-            for chunk in response.iter_content(chunk_size=self.chunkSize):
-                self.bytesWritten += self.chunkSize
-                self._updateDisplay()
-                outputFile.write(chunk)
+
+    def _cleanUp(self):
         self.stream.write("\n")
         self.stream.flush()
 
@@ -82,21 +108,144 @@ class FileDownloader(object):
         else:
             return self.basename  # TODO scrolling window here
 
-    def _updateDisplay(self):
+    def _updateDisplay(self, modulo=1):
+        self.displayCounter += 1
+        if self.displayCounter % modulo != 0:
+            return
         fileName = self._getFileNameDisplayString()
-
-        # TODO contentLength seems to slightly under-report how many bytes
+        # TODO contentlength seems to slightly under-report how many bytes
         # we have to download... hence the min functions
-        percentage = min(self.bytesWritten / self.contentLength, 1)
+        percentage = min(self.bytesReceived / self.fileSize, 1)
         numerator = humanize.filesize.naturalsize(
-            min(self.bytesWritten, self.contentLength))
+            min(self.bytesReceived, self.fileSize))
         denominator = humanize.filesize.naturalsize(
-            self.contentLength)
-
+            self.fileSize)
         displayString = "{}   {:<6.2%} ({:>9} / {:<9})\r"
         self.stream.write(displayString.format(
             fileName, percentage, numerator, denominator))
         self.stream.flush()
+
+
+class HttpFileDownloader(FileDownloader):
+    """
+    Provides a wget-like file download and terminal display for HTTP
+    """
+    defaultChunkSize = 1048576  # 1MB
+
+    def __init__(self, url, path, chunkSize=defaultChunkSize,
+                 stream=FileDownloader.defaultStream):
+        super(HttpFileDownloader, self).__init__(
+            url, path, stream)
+        self.chunkSize = chunkSize
+
+    def download(self):
+        self._printStartDownloadMessage()
+        response = requests.get(self.url, stream=True)
+        response.raise_for_status()
+        self.fileSize = int(response.headers['content-length'])
+        with open(self.path, 'wb') as outputFile:
+            for chunk in response.iter_content(chunk_size=self.chunkSize):
+                self.bytesReceived += self.chunkSize
+                self._updateDisplay()
+                outputFile.write(chunk)
+        self._cleanUp()
+
+
+class FtpFileDownloader(FileDownloader):
+    """
+    File downloader for FTP
+    """
+    def __init__(self, url, path, stream=FileDownloader.defaultStream):
+        super(FtpFileDownloader, self).__init__(
+            url, path, stream)
+        self.parsedUrl = urlparse.urlparse(self.url)
+
+    def _beginFtp(self):
+        ftp = ftplib.FTP(self.parsedUrl.netloc)
+        ftp.login()
+        ftp.cwd(os.path.dirname(self.parsedUrl.path))
+        ftp.voidcmd('TYPE I')  # switch to binary mode
+        self.fileSize = ftp.size(self.basename)
+        return ftp
+
+    def _endFtp(self, ftp):
+        self._cleanUp()
+        ftp.quit()
+
+    def download(self):
+        self._printStartDownloadMessage()
+        ftp = self._beginFtp()
+        with open(self.path, 'wb') as localFile:
+            def callback(data):
+                self.bytesReceived += len(data)
+                self._updateDisplay(1000)
+                localFile.write(data)
+            ftp.retrbinary('RETR {}'.format(self.basename), callback)
+        self._updateDisplay()
+        self._endFtp(ftp)
+
+
+class StopDownloadException(Exception):
+    """
+    Thrown when we want to stop a download
+    """
+
+
+class GunzipFtpFileDownloader(FtpFileDownloader):
+    """
+    Fetches a gziped file via FTP and unzips it on the fly
+    """
+    def __init__(self, url, path, stream=FileDownloader.defaultStream):
+        super(GunzipFtpFileDownloader, self).__init__(
+            url, path, stream)
+
+    def writeData(self, data, localFile):
+        localFile.write(data)
+
+    def _updateDisplayTerminate(self):
+        displayString = "\nterminating download"
+        self.stream.write(displayString)
+        self.stream.flush()
+
+    def download(self):
+        self._printStartDownloadMessage()
+        ftp = self._beginFtp()
+        decompresser = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        try:
+            with open(self.path, 'w') as localFile:
+                def callback(data):
+                    self.bytesReceived += len(data)
+                    self._updateDisplay(1000)
+                    unzipedData = decompresser.decompress(data)
+                    self.writeData(unzipedData, localFile)
+                ftp.retrbinary('RETR {}'.format(self.basename), callback)
+        except StopDownloadException:
+            self._updateDisplayTerminate()
+        else:
+            self._updateDisplay()
+        self._endFtp(ftp)
+
+
+class FastaGunzipFtpFileDownloader(GunzipFtpFileDownloader):
+    """
+    Fetches a Fasta file via FTP and gunzips it on the fly,
+    but only downloads the file to a certain point.
+    """
+    def __init__(self, url, path, maxCoord,
+                 stream=FileDownloader.defaultStream):
+        super(FastaGunzipFtpFileDownloader, self).__init__(
+            url, path, stream)
+        self.maxCoord = maxCoord
+        self.coordsWritten = 0
+
+    def writeData(self, data, localFile):
+        splits = data.split()
+        for split in splits:
+            if split[0] != '>':
+                self.coordsWritten += len(split)
+        super(FastaGunzipFtpFileDownloader, self).writeData(data, localFile)
+        if self.coordsWritten >= self.maxCoord:
+            raise StopDownloadException
 
 
 def runCommandSplits(splits, silent=False):
