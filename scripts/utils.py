@@ -26,6 +26,36 @@ def log(message):
     print(message)
 
 
+class Retry(object):
+    """
+    A decorator that attempts to perform an action numAttempts times before
+    giving up
+    """
+    def __init__(self, numAttempts, expectedExceptions):
+        self.numAttempts = numAttempts
+        self.expectedExceptions = expectedExceptions
+
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            triesLeft = self.numAttempts
+            savedException = None
+            success = False
+            while triesLeft > 0:
+                try:
+                    result = func(*args, **kwargs)
+                    success = True
+                    break
+                except self.expectedExceptions as exception:
+                    savedException = exception
+                    triesLeft -= 1
+                    log("({} tries left)".format(triesLeft))
+            if not success:
+                raise savedException
+            return result
+        return wrapper
+
+
 class Timed(object):
     """
     Decorator that times a method, reporting runtime at finish
@@ -76,13 +106,9 @@ class FileDownloader(object):
         if self.basenameLength <= self.displayWindowSize:
             return self.basename
         else:
-            # TODO scrolling window here
-            return self.basename[:self.displayWindowSize - 3] + '...'
+            return self.basename  # TODO scrolling window here
 
     def _updateDisplay(self, modulo=1):
-        # TODO come up with a way to update based on number of bytes
-        # downloaded rather than number of callbacks... the rate
-        # at which this happens seems to vary wildly
         self.displayCounter += 1
         if self.displayCounter % modulo != 0:
             return
@@ -198,31 +224,6 @@ class GunzipFtpFileDownloader(FtpFileDownloader):
         else:
             self._updateDisplay()
         self._endFtp(ftp)
-
-
-class VcfGunzipFtpFileDownloader(GunzipFtpFileDownloader):
-    """
-    Fetches a VCF file via FTP and gunzips it on the fly,
-    but only downloads the file to a certain point.
-    """
-    def __init__(self, url, path, numLines,
-                 stream=FileDownloader.defaultStream):
-        super(VcfGunzipFtpFileDownloader, self).__init__(
-            url, path, stream)
-        self.numLines = numLines
-        self.linesWritten = 0
-
-    def writeData(self, data, localFile):
-        splits = data.split('\n')
-        import pdb; pdb.set_trace()
-        for split in splits:
-            if len(split) == 0:
-                continue
-            if split[0] != '#':
-                self.linesWritten += 1
-            localFile.write(split + '\n')
-        if self.linesWritten >= self.numLines:
-            raise StopDownloadException
 
 
 class FastaGunzipFtpFileDownloader(GunzipFtpFileDownloader):

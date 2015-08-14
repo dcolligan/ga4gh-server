@@ -109,6 +109,29 @@ class NcbiFileDownloader(AbstractFileDownloader):
         for _ in range(levels):
             os.chdir('..')
 
+    def _downloadIndex(self, fileName):
+
+        @utils.Retry(self.args.num_retries, (IOError))
+        def downloadTabixIndex(remoteFileUrl):
+            # not sure why an IOError is sometimes thrown here, as if
+            # pysam can't find the file
+            return pysam.TabixFile(remoteFileUrl)
+
+        @utils.Retry(self.args.num_retries, (IndexError))
+        def downloadVariantIndex(remoteFileUrl):
+            # not sure why an IndexError is sometimes thrown here
+            return pysam.VariantFile(remoteFileUrl)
+
+        baseUrl = self._getBaseUrl()
+        remoteFileUrl = os.path.join(baseUrl, fileName)
+        utils.log("Downloading index for '{}'".format(remoteFileUrl))
+        remoteTabixFile = downloadTabixIndex(remoteFileUrl)
+        assert len(remoteTabixFile.contigs) == 1
+        # we can't get the header from a TabixFile since that throws an
+        # IOError, so we open the same file with the VariantFile interface
+        remoteVariantFile = downloadVariantIndex(remoteFileUrl)
+        return remoteTabixFile, remoteVariantFile
+
     def _updatePositions(self, compressedLocalFileName, contig):
         localVariantFile = pysam.VariantFile(compressedLocalFileName)
         localIterator = localVariantFile.fetch(contig)
@@ -120,20 +143,33 @@ class NcbiFileDownloader(AbstractFileDownloader):
         localIterator = None
         localVariantFile.close()
 
-    def _processFileName(self, compressedVcfFileName):
-        baseUrl = self._getBaseUrl()
-        remoteUrl = os.path.join(baseUrl, compressedVcfFileName)
-        vcfFileName, _ = os.path.splitext(compressedVcfFileName)
-        numLines = 1000
-        downloader = utils.VcfGunzipFtpFileDownloader(
-            remoteUrl, vcfFileName, numLines)
-        downloader.download()
-        import pdb; pdb.set_trace()
-        utils.log("Compressing '{}'".format(vcfFileName))
-        utils.runCommand('bgzip -f {}'.format(vcfFileName))
-        utils.log("Indexing '{}'".format(compressedVcfFileName))
-        utils.runCommand('tabix {}'.format(compressedVcfFileName))
-        self._updatePositions(compressedLocalFileName)
+    def _processFileName(self, fileName):
+        remoteIndexFile = fileName + '.tbi'
+        remoteTabixFile, remoteVariantFile = self._downloadIndex(
+            fileName)
+        contig = remoteTabixFile.contigs[0]
+        iterator = remoteTabixFile.fetch(contig)
+        localFileName, _ = os.path.splitext(fileName)
+        utils.log("Writing '{}'".format(localFileName))
+        with open(localFileName, 'w') as localFile:
+            headerData = str(remoteVariantFile.header)
+            localFile.write(headerData)
+            numRecords = 0
+            for _ in range(self.args.num_vcf_records):
+                data = iterator.next()
+                localFile.write(data)
+                numRecords += 1
+            utils.log("{} records written".format(numRecords))
+        iterator = None
+        remoteTabixFile.close()
+        remoteVariantFile.close()
+        os.remove(remoteIndexFile)
+        utils.log("Compressing '{}'".format(localFileName))
+        utils.runCommand('bgzip -f {}'.format(localFileName))
+        compressedLocalFileName = localFileName + '.gz'
+        utils.log("Indexing '{}'".format(compressedLocalFileName))
+        utils.runCommand('tabix {}'.format(compressedLocalFileName))
+        self._updatePositions(compressedLocalFileName, contig)
 
     def downloadVcfs(self):
         self._prepareDir()
@@ -236,6 +272,9 @@ def parseArgs():
         "--dir-name", default="ga4gh-downloaded-data",
         help="the name of the directory that the data is downloaded to")
     parser.add_argument(
+        "--num-retries", default=3, type=int,
+        help="the number of times to retry a failed download")
+    parser.add_argument(
         "--samples", default='HG00096,HG00533,HG00534',
         help="a comma-seperated list of samples to download")
     args = parser.parse_args()
@@ -246,9 +285,9 @@ def parseArgs():
 def main(args):
     downloaderClass = sources[args.source]
     downloader = downloaderClass(args)
-    downloader.downloadVcfs()
+    # downloader.downloadVcfs()
     # downloader.downloadBams()
-    # downloader.downloadRefs()
+    downloader.downloadRefs()
 
 
 if __name__ == '__main__':
