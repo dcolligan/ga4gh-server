@@ -14,7 +14,6 @@ import subprocess
 import sys
 import time
 import urlparse
-import zlib
 
 import humanize
 import requests

@@ -3,13 +3,9 @@ Constructs a data source for the ga4gh server by downloading data from
 authoritative remote servers.
 """
 # TODO
-# - refactor into proper inheritence hierarchy
 # - need some kind of checkpoint functionality to resume process
 #   where it left off since getting a clean run is so rare...
-# - implement EBI class; corresponding urls for EBI:
-#   ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/
-#   ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/phase3/data/
-#   ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/
+# - references support
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -59,28 +55,25 @@ def cleanDir():
             os.remove(fileName)
 
 
+def escapeDir(levels=4):
+    # back to orig dir
+    for _ in range(levels):
+        os.chdir('..')
+
+
 class AbstractFileDownloader(object):
     """
     Base class for individual site genome file downloaders
     """
-    def __init__(self):
-        pass
-
-
-class NcbiFileDownloader(AbstractFileDownloader):
-    """
-    Downloads files from NCBI
-    """
     def __init__(self, args):
-        super(NcbiFileDownloader, self).__init__()
         self.args = args
-        self.maxPos = 2**30
-        self.minPos = 0
+        self.maxPos = 0
+        self.minPos = 2**30 
         self.datasetId = 'dataset1'
         self.variantSetId = self.args.source
         self.referenceSetId = 'main'
 
-    def _getFilenames(self):
+    def _getVcfFilenames(self):
         baseFileName = (
             "ALL.chr{}.phase3_shapeit2_mvncall_integrated_v5a"
             ".20130502.genotypes.vcf.gz")
@@ -94,11 +87,11 @@ class NcbiFileDownloader(AbstractFileDownloader):
             'ALL.chrY.phase3_integrated_v1a.20130502.genotypes.vcf.gz')
         return fileNames
 
-    def _getBaseUrl(self):
-        baseUrl = (
-            "ftp://ftp-trace.ncbi.nih.gov"
-            "/1000genomes/ftp/release/20130502/")
-        return baseUrl
+    def getVcfBaseUrl(self):
+        return self.getBaseUrl() + '/ftp/release/20130502/'
+
+    def getBamBaseUrl(self):
+        return self.getBaseUrl() + '/ftp/phase3/data/'
 
     def _prepareDir(self):
         dirList = [
@@ -106,11 +99,6 @@ class NcbiFileDownloader(AbstractFileDownloader):
             self.variantSetId]
         mkdirAndChdirList(dirList)
         cleanDir()
-
-    def _escapeDir(self, levels=4):
-        # back to orig dir
-        for _ in range(levels):
-            os.chdir('..')
 
     def _updatePositions(self, fileName):
         localVariantFile = pysam.VariantFile(fileName)
@@ -122,9 +110,10 @@ class NcbiFileDownloader(AbstractFileDownloader):
                 self.minPos = record.start
         localIterator = None
         localVariantFile.close()
+        utils.log('maxPos: {}, minPos: {}'.format(self.maxPos, self.minPos))
 
     def _processFileName(self, fileName):
-        url = os.path.join(self._getBaseUrl(), fileName)
+        url = os.path.join(self.getVcfBaseUrl(), fileName)
         utils.log("Downloading '{}'".format(url))
         response = urllib2.urlopen(url)
         megabyte = 1024 * 1024
@@ -138,7 +127,7 @@ class NcbiFileDownloader(AbstractFileDownloader):
             gzipFile = gzip.open(binaryFile.name, "r")
             outputFile = open(localFileName, "w")
             lineCount = 0
-            for line in gzipFile:                
+            for line in gzipFile:
                 outputFile.write(line)
                 if not line.startswith("#"):
                     lineCount += 1
@@ -155,10 +144,10 @@ class NcbiFileDownloader(AbstractFileDownloader):
 
     def downloadVcfs(self):
         self._prepareDir()
-        fileNames = self._getFilenames()
+        fileNames = self._getVcfFilenames()
         for fileName in fileNames:
             self._processFileName(fileName)
-        self._escapeDir()
+        escapeDir()
 
     def downloadBams(self):
         dirList = [
@@ -170,8 +159,7 @@ class NcbiFileDownloader(AbstractFileDownloader):
             'HG00533': 'CHS',
             'HG00534': 'CHS',
         }
-        baseUrl = (
-            'ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/phase3/data/')
+        baseUrl = self.getBamBaseUrl()
         samples = self.args.samples.split(',')
         for sample in samples:
             samplePath = '{}/alignment/'.format(sample)
@@ -186,8 +174,6 @@ class NcbiFileDownloader(AbstractFileDownloader):
             utils.log("Writing '{}'".format(fileName))
             localFile = pysam.AlignmentFile(
                 fileName, 'wb', header=header)
-            self.minPos = 100  # TODO just so this doesn't take forever
-            self.maxPos = 200  # TODO remove later
             for reference in remoteFile.references:
                 utils.log("reference {}".format(reference))
                 iterator = remoteFile.fetch(
@@ -203,18 +189,32 @@ class NcbiFileDownloader(AbstractFileDownloader):
             baiFileName = fileName + '.bai'
             os.remove(baiFileName)
             utils.log("Indexing '{}'".format(fileName))
-            # TODO pysam.index(fileName) gives unicode error
+            # TODO pysam.index(fileName) gives unicode error;
             # using command line tool instead
             utils.runCommand("samtools index {}".format(fileName))
-        self._escapeDir()
+        escapeDir()
+
+
+class NcbiFileDownloader(AbstractFileDownloader):
+    """
+    Downloads files from NCBI
+    """
+    def __init__(self, args):
+        super(NcbiFileDownloader, self).__init__(args)
+
+    def getBaseUrl(self):
+        return 'ftp://ftp-trace.ncbi.nih.gov/1000genomes/'
 
 
 class EbiFileDownloader(AbstractFileDownloader):
     """
     Downloads files from EBI
     """
-    def __init__(self):
-        super(EbiFileDownloader, self).__init__()
+    def __init__(self, args):
+        super(EbiFileDownloader, self).__init__(args)
+
+    def getBaseUrl(self):
+        return 'ftp://ftp.1000genomes.ebi.ac.uk/vol1'
 
 
 sources = {
