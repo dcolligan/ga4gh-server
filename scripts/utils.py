@@ -26,36 +26,6 @@ def log(message):
     print(message)
 
 
-class Retry(object):
-    """
-    A decorator that attempts to perform an action numAttempts times before
-    giving up
-    """
-    def __init__(self, numAttempts, expectedExceptions):
-        self.numAttempts = numAttempts
-        self.expectedExceptions = expectedExceptions
-
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            triesLeft = self.numAttempts
-            savedException = None
-            success = False
-            while triesLeft > 0:
-                try:
-                    result = func(*args, **kwargs)
-                    success = True
-                    break
-                except self.expectedExceptions as exception:
-                    savedException = exception
-                    triesLeft -= 1
-                    log("({} tries left)".format(triesLeft))
-            if not success:
-                raise savedException
-            return result
-        return wrapper
-
-
 class Timed(object):
     """
     Decorator that times a method, reporting runtime at finish
@@ -182,47 +152,6 @@ class FtpFileDownloader(FileDownloader):
                 localFile.write(data)
             ftp.retrbinary('RETR {}'.format(self.basename), callback)
         self._updateDisplay()
-        self._endFtp(ftp)
-
-
-class StopDownloadException(Exception):
-    """
-    Thrown when we want to stop a download
-    """
-
-
-class GunzipFtpFileDownloader(FtpFileDownloader):
-    """
-    Fetches a gziped file via FTP and unzips it on the fly
-    """
-    def __init__(self, url, path, stream=FileDownloader.defaultStream):
-        super(GunzipFtpFileDownloader, self).__init__(
-            url, path, stream)
-
-    def writeData(self, data, localFile):
-        localFile.write(data)
-
-    def _updateDisplayTerminate(self):
-        displayString = "\nterminating download"
-        self.stream.write(displayString)
-        self.stream.flush()
-
-    def download(self):
-        self._printStartDownloadMessage()
-        ftp = self._beginFtp()
-        decompresser = zlib.decompressobj(16 + zlib.MAX_WBITS)
-        try:
-            with open(self.path, 'w') as localFile:
-                def callback(data):
-                    self.bytesReceived += len(data)
-                    self._updateDisplay(1000)
-                    unzipedData = decompresser.decompress(data)
-                    self.writeData(unzipedData, localFile)
-                ftp.retrbinary('RETR {}'.format(self.basename), callback)
-        except StopDownloadException:
-            self._updateDisplayTerminate()
-        else:
-            self._updateDisplay()
         self._endFtp(ftp)
 
 

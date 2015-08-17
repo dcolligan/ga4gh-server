@@ -16,7 +16,10 @@ from __future__ import unicode_literals
 
 import argparse
 import glob
+import gzip
 import os
+import tempfile
+import urllib2
 
 import pysam
 
@@ -109,32 +112,9 @@ class NcbiFileDownloader(AbstractFileDownloader):
         for _ in range(levels):
             os.chdir('..')
 
-    def _downloadIndex(self, fileName):
-
-        @utils.Retry(self.args.num_retries, (IOError))
-        def downloadTabixIndex(remoteFileUrl):
-            # not sure why an IOError is sometimes thrown here, as if
-            # pysam can't find the file
-            return pysam.TabixFile(remoteFileUrl)
-
-        @utils.Retry(self.args.num_retries, (IndexError))
-        def downloadVariantIndex(remoteFileUrl):
-            # not sure why an IndexError is sometimes thrown here
-            return pysam.VariantFile(remoteFileUrl)
-
-        baseUrl = self._getBaseUrl()
-        remoteFileUrl = os.path.join(baseUrl, fileName)
-        utils.log("Downloading index for '{}'".format(remoteFileUrl))
-        remoteTabixFile = downloadTabixIndex(remoteFileUrl)
-        assert len(remoteTabixFile.contigs) == 1
-        # we can't get the header from a TabixFile since that throws an
-        # IOError, so we open the same file with the VariantFile interface
-        remoteVariantFile = downloadVariantIndex(remoteFileUrl)
-        return remoteTabixFile, remoteVariantFile
-
-    def _updatePositions(self, compressedLocalFileName, contig):
-        localVariantFile = pysam.VariantFile(compressedLocalFileName)
-        localIterator = localVariantFile.fetch(contig)
+    def _updatePositions(self, fileName):
+        localVariantFile = pysam.VariantFile(fileName)
+        localIterator = localVariantFile.fetch()
         for record in localIterator:
             if record.start > self.maxPos:
                 self.maxPos = record.start
@@ -144,32 +124,34 @@ class NcbiFileDownloader(AbstractFileDownloader):
         localVariantFile.close()
 
     def _processFileName(self, fileName):
-        remoteIndexFile = fileName + '.tbi'
-        remoteTabixFile, remoteVariantFile = self._downloadIndex(
-            fileName)
-        contig = remoteTabixFile.contigs[0]
-        iterator = remoteTabixFile.fetch(contig)
+        url = os.path.join(self._getBaseUrl(), fileName)
+        utils.log("Downloading '{}'".format(url))
+        response = urllib2.urlopen(url)
+        megabyte = 1024 * 1024
+        data = response.read(megabyte)
+        lineCountQuota = 1000
         localFileName, _ = os.path.splitext(fileName)
         utils.log("Writing '{}'".format(localFileName))
-        with open(localFileName, 'w') as localFile:
-            headerData = str(remoteVariantFile.header)
-            localFile.write(headerData)
-            numRecords = 0
-            for _ in range(self.args.num_vcf_records):
-                data = iterator.next()
-                localFile.write(data)
-                numRecords += 1
-            utils.log("{} records written".format(numRecords))
-        iterator = None
-        remoteTabixFile.close()
-        remoteVariantFile.close()
-        os.remove(remoteIndexFile)
+        with tempfile.NamedTemporaryFile() as binaryFile:
+            binaryFile.write(data)
+            binaryFile.flush()
+            gzipFile = gzip.open(binaryFile.name, "r")
+            outputFile = open(localFileName, "w")
+            lineCount = 0
+            for line in gzipFile:                
+                outputFile.write(line)
+                if not line.startswith("#"):
+                    lineCount += 1
+                if lineCount >= lineCountQuota:
+                    break
+            assert lineCount == lineCountQuota
+            outputFile.close()
+            gzipFile.close()
         utils.log("Compressing '{}'".format(localFileName))
         utils.runCommand('bgzip -f {}'.format(localFileName))
-        compressedLocalFileName = localFileName + '.gz'
-        utils.log("Indexing '{}'".format(compressedLocalFileName))
-        utils.runCommand('tabix {}'.format(compressedLocalFileName))
-        self._updatePositions(compressedLocalFileName, contig)
+        utils.log("Indexing '{}'".format(fileName))
+        utils.runCommand('tabix {}'.format(fileName))
+        self._updatePositions(fileName)
 
     def downloadVcfs(self):
         self._prepareDir()
@@ -252,9 +234,6 @@ def parseArgs():
     parser.add_argument(
         "--dir-name", default="ga4gh-downloaded-data",
         help="the name of the directory that the data is downloaded to")
-    parser.add_argument(
-        "--num-retries", default=3, type=int,
-        help="the number of times to retry a failed download")
     parser.add_argument(
         "--samples", default='HG00096,HG00533,HG00534',
         help="a comma-seperated list of samples to download")
