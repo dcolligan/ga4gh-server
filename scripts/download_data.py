@@ -226,25 +226,6 @@ class NcbiFileDownloader(AbstractFileDownloader):
             utils.runCommand("samtools index {}".format(fileName))
         self._escapeDir()
 
-    def downloadRefs(self):
-        dirList = [
-            self.args.dir_name, 'references', self.referenceSetId]
-        mkdirAndChdirList(dirList)
-        cleanDir()
-        baseUrl = (
-            'ftp://ftp-trace.ncbi.nih.gov/'
-            '1000genomes/ftp/technical/reference/')
-        compressedFastaFileName = 'human_g1k_v37.fasta.gz'
-        fastaFileName, _ = os.path.splitext(compressedFastaFileName)
-        remoteUrl = os.path.join(baseUrl, compressedFastaFileName)
-        maxCoord = 100000000  # TODO change later
-        downloader = utils.FastaGunzipFtpFileDownloader(
-            remoteUrl, fastaFileName, maxCoord)
-        downloader.download()
-        utils.log("Indexing {}".format(fastaFileName))
-        utils.runCommand("samtools faidx {}".format(fastaFileName))
-        self._escapeDir(3)
-
 
 class EbiFileDownloader(AbstractFileDownloader):
     """
@@ -285,9 +266,8 @@ def parseArgs():
 def main(args):
     downloaderClass = sources[args.source]
     downloader = downloaderClass(args)
-    # downloader.downloadVcfs()
-    # downloader.downloadBams()
-    downloader.downloadRefs()
+    downloader.downloadVcfs()
+    downloader.downloadBams()
 
 
 if __name__ == '__main__':

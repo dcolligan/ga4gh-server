@@ -226,28 +226,6 @@ class GunzipFtpFileDownloader(FtpFileDownloader):
         self._endFtp(ftp)
 
 
-class FastaGunzipFtpFileDownloader(GunzipFtpFileDownloader):
-    """
-    Fetches a Fasta file via FTP and gunzips it on the fly,
-    but only downloads the file to a certain point.
-    """
-    def __init__(self, url, path, maxCoord,
-                 stream=FileDownloader.defaultStream):
-        super(FastaGunzipFtpFileDownloader, self).__init__(
-            url, path, stream)
-        self.maxCoord = maxCoord
-        self.coordsWritten = 0
-
-    def writeData(self, data, localFile):
-        splits = data.split()
-        for split in splits:
-            if split[0] != '>':
-                self.coordsWritten += len(split)
-        super(FastaGunzipFtpFileDownloader, self).writeData(data, localFile)
-        if self.coordsWritten >= self.maxCoord:
-            raise StopDownloadException
-
-
 def runCommandSplits(splits, silent=False):
     """
     Run a shell command given the command's parsed command line
