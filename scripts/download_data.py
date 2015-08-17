@@ -68,7 +68,7 @@ class AbstractFileDownloader(object):
     def __init__(self, args):
         self.args = args
         self.maxPos = 0
-        self.minPos = 2**30 
+        self.minPos = 2**30
         self.datasetId = 'dataset1'
         self.variantSetId = self.args.source
         self.referenceSetId = 'main'
@@ -182,6 +182,8 @@ class AbstractFileDownloader(object):
                 for record in iterator:
                     localFile.write(record)
                     numRecords += 1
+                    if numRecords >= args.num_reads:
+                        break
                 utils.log("{} records written".format(numRecords))
             iterator = None
             remoteFile.close()
@@ -229,14 +231,14 @@ def parseArgs():
         "--source", default="ncbi", choices=sources.keys(),
         help="the source to download from")
     parser.add_argument(
-        "--num-vcf-records", default=5, type=int,
-        help="the number of records to pull from each VCF file")
-    parser.add_argument(
         "--dir-name", default="ga4gh-downloaded-data",
         help="the name of the directory that the data is downloaded to")
     parser.add_argument(
         "--samples", default='HG00096,HG00533,HG00534',
         help="a comma-seperated list of samples to download")
+    parser.add_argument(
+        "--num-reads", default=1000,
+        help="the number of reads to download per reference")
     args = parser.parse_args()
     return args
 
