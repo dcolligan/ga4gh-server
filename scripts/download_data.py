@@ -101,9 +101,8 @@ class AbstractFileDownloader(object):
     """
     def __init__(self, args):
         self.args = args
-        self.datasetId = 'dataset1'
-        self.variantSetId = self.args.source
-        self.referenceSetId = 'main'
+        self.datasetName = 'dataset1'
+        self.variantSetName = self.args.source
         self.chromMinMax = ChromMinMax()
 
     def _getVcfFilenames(self):
@@ -128,8 +127,8 @@ class AbstractFileDownloader(object):
 
     def _prepareDir(self):
         dirList = [
-            self.args.dir_name, self.datasetId, 'variants',
-            self.variantSetId]
+            self.args.dir_name, self.datasetName, 'variants',
+            self.variantSetName]
         mkdirAndChdirList(dirList)
         cleanDir()
 
@@ -183,7 +182,7 @@ class AbstractFileDownloader(object):
 
     def downloadBams(self):
         dirList = [
-            self.args.dir_name, self.datasetId, 'reads', 'low-coverage']
+            self.args.dir_name, self.datasetName, 'reads', 'low-coverage']
         mkdirAndChdirList(dirList)
         cleanDir()
         studyMap = {
@@ -206,7 +205,7 @@ class AbstractFileDownloader(object):
             utils.log("Writing '{}'".format(fileName))
             localFile = pysam.AlignmentFile(
                 fileName, 'wb', header=header)
-            refsToDownload = args.references.split(',')
+            refsToDownload = args.chromosomes.split(',')
             for reference in refsToDownload:
                 utils.log("reference {}".format(reference))
                 iterator = remoteFile.fetch(
@@ -271,8 +270,8 @@ def parseArgs():
         "--num-reads", default=1000,
         help="the number of reads to download per reference")
     parser.add_argument(
-        "--references", default="1,2,3,X,Y",
-        help="the references whose corresponding reads should be downloaded")
+        "--chromosomes", default="1,2,3,X,Y",
+        help="the chromosomes whose corresponding reads should be downloaded")
     args = parser.parse_args()
     return args
 
