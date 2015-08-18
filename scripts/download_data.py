@@ -104,19 +104,25 @@ class AbstractFileDownloader(object):
         self.datasetName = 'dataset1'
         self.variantSetName = self.args.source
         self.chromMinMax = ChromMinMax()
+        self.chromosomes = self.args.chromosomes.split(',')
 
     def _getVcfFilenames(self):
         baseFileName = (
             "ALL.chr{}.phase3_shapeit2_mvncall_integrated_v5a"
             ".20130502.genotypes.vcf.gz")
-        chrNames = [str(i) for i in range(1, 23)]
+        chrNames = [
+            str(i) for i in range(1, 23)
+            if str(i) in self.chromosomes]
         fileNames = [baseFileName.format(chrName) for chrName in chrNames]
         # the X and Y files use a different filename prefix
-        fileNames.append(
-            'ALL.chrX.phase3_shapeit2_mvncall_integrated_v1a'
-            '.20130502.genotypes.vcf.gz')
-        fileNames.append(
-            'ALL.chrY.phase3_integrated_v1a.20130502.genotypes.vcf.gz')
+        if 'X' in self.chromosomes:
+            fileNames.append(
+                'ALL.chrX.phase3_shapeit2_mvncall_integrated_v1a.'
+                '20130502.genotypes.vcf.gz')
+        if 'Y' in self.chromosomes:
+            fileNames.append(
+                'ALL.chrY.phase3_integrated_v1a.'
+                '20130502.genotypes.vcf.gz')
         return fileNames
 
     def getVcfBaseUrl(self):
@@ -205,13 +211,12 @@ class AbstractFileDownloader(object):
             utils.log("Writing '{}'".format(fileName))
             localFile = pysam.AlignmentFile(
                 fileName, 'wb', header=header)
-            refsToDownload = args.chromosomes.split(',')
-            for reference in refsToDownload:
-                utils.log("reference {}".format(reference))
+            for chromosome in self.chromosomes:
+                utils.log("chromosome {}".format(chromosome))
                 iterator = remoteFile.fetch(
-                    reference.encode('utf-8'),
-                    start=self.chromMinMax.getMinPos(reference),
-                    end=self.chromMinMax.getMaxPos(reference))
+                    chromosome.encode('utf-8'),
+                    start=self.chromMinMax.getMinPos(chromosome),
+                    end=self.chromMinMax.getMaxPos(chromosome))
                 for index, record in enumerate(iterator):
                     if index >= args.num_reads:
                         break
