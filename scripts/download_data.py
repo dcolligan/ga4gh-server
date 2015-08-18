@@ -61,17 +61,50 @@ def escapeDir(levels=4):
         os.chdir('..')
 
 
+class ChromMinMax(object):
+    """
+    A container class for storing the min and max position seen
+    for every chromosome
+    """
+    defaultMinPos = 2**30
+    defaultMaxPos = 0
+
+    class MinMax(object):
+        def __init__(self):
+            self.minPos = ChromMinMax.defaultMinPos
+            self.maxPos = ChromMinMax.defaultMaxPos
+
+    def __init__(self):
+        self.chromMap = {}
+
+    def addPos(self, chrom, position):
+        if chrom not in self.chromMap:
+            self.chromMap[chrom] = self.MinMax()
+        minMax = self.chromMap[chrom]
+        if position > minMax.maxPos:
+            minMax.maxPos = position
+        if position < minMax.minPos:
+            minMax.minPos = position
+
+    def getMinPos(self, chrom):
+        minMax = self.chromMap[chrom]
+        return minMax.minPos
+
+    def getMaxPos(self, chrom):
+        minMax = self.chromMap[chrom]
+        return minMax.maxPos
+
+
 class AbstractFileDownloader(object):
     """
     Base class for individual site genome file downloaders
     """
     def __init__(self, args):
         self.args = args
-        self.maxPos = 0
-        self.minPos = 2**30
         self.datasetId = 'dataset1'
         self.variantSetId = self.args.source
         self.referenceSetId = 'main'
+        self.chromMinMax = ChromMinMax()
 
     def _getVcfFilenames(self):
         baseFileName = (
@@ -88,10 +121,10 @@ class AbstractFileDownloader(object):
         return fileNames
 
     def getVcfBaseUrl(self):
-        return self.getBaseUrl() + '/ftp/release/20130502/'
+        return os.path.join(self.getBaseUrl(), 'ftp/release/20130502/')
 
     def getBamBaseUrl(self):
-        return self.getBaseUrl() + '/ftp/phase3/data/'
+        return os.path.join(self.getBaseUrl(), 'ftp/phase3/data/')
 
     def _prepareDir(self):
         dirList = [
@@ -104,13 +137,12 @@ class AbstractFileDownloader(object):
         localVariantFile = pysam.VariantFile(fileName)
         localIterator = localVariantFile.fetch()
         for record in localIterator:
-            if record.start > self.maxPos:
-                self.maxPos = record.start
-            if record.start < self.minPos:
-                self.minPos = record.start
+            self.chromMinMax.addPos(record.chrom, record.start)
         localIterator = None
         localVariantFile.close()
-        utils.log('maxPos: {}, minPos: {}'.format(self.maxPos, self.minPos))
+        utils.log('chrom: {}, maxPos: {}, minPos: {}'.format(
+            record.chrom, self.chromMinMax.getMaxPos(record.chrom),
+            self.chromMinMax.getMinPos(record.chrom)))
 
     def _processFileName(self, fileName):
         url = os.path.join(self.getVcfBaseUrl(), fileName)
@@ -174,26 +206,25 @@ class AbstractFileDownloader(object):
             utils.log("Writing '{}'".format(fileName))
             localFile = pysam.AlignmentFile(
                 fileName, 'wb', header=header)
-            for reference in remoteFile.references:
+            refsToDownload = args.references.split(',')
+            for reference in refsToDownload:
                 utils.log("reference {}".format(reference))
                 iterator = remoteFile.fetch(
-                    reference, start=self.minPos, end=self.maxPos)
-                numRecords = 0
-                for record in iterator:
-                    localFile.write(record)
-                    numRecords += 1
-                    if numRecords >= args.num_reads:
+                    reference.encode('utf-8'),
+                    start=self.chromMinMax.getMinPos(reference),
+                    end=self.chromMinMax.getMaxPos(reference))
+                for index, record in enumerate(iterator):
+                    if index >= args.num_reads:
                         break
-                utils.log("{} records written".format(numRecords))
+                    localFile.write(record)
+                utils.log("{} records written".format(index))
             iterator = None
             remoteFile.close()
             localFile.close()
             baiFileName = fileName + '.bai'
             os.remove(baiFileName)
             utils.log("Indexing '{}'".format(fileName))
-            # TODO pysam.index(fileName) gives unicode error;
-            # using command line tool instead
-            utils.runCommand("samtools index {}".format(fileName))
+            pysam.index(fileName.encode('utf-8'))
         escapeDir()
 
 
@@ -205,7 +236,7 @@ class NcbiFileDownloader(AbstractFileDownloader):
         super(NcbiFileDownloader, self).__init__(args)
 
     def getBaseUrl(self):
-        return 'ftp://ftp-trace.ncbi.nih.gov/1000genomes/'
+        return 'ftp://ftp-trace.ncbi.nih.gov/1000genomes'
 
 
 class EbiFileDownloader(AbstractFileDownloader):
@@ -239,6 +270,9 @@ def parseArgs():
     parser.add_argument(
         "--num-reads", default=1000,
         help="the number of reads to download per reference")
+    parser.add_argument(
+        "--references", default="1,2,3,X,Y",
+        help="the references whose corresponding reads should be downloaded")
     args = parser.parse_args()
     return args
 

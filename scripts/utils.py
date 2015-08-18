@@ -6,14 +6,12 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import argparse
-import ftplib
 import functools
 import os
 import shlex
 import subprocess
 import sys
 import time
-import urlparse
 
 import humanize
 import requests
@@ -118,40 +116,6 @@ class HttpFileDownloader(FileDownloader):
                 self._updateDisplay()
                 outputFile.write(chunk)
         self._cleanUp()
-
-
-class FtpFileDownloader(FileDownloader):
-    """
-    File downloader for FTP
-    """
-    def __init__(self, url, path, stream=FileDownloader.defaultStream):
-        super(FtpFileDownloader, self).__init__(
-            url, path, stream)
-        self.parsedUrl = urlparse.urlparse(self.url)
-
-    def _beginFtp(self):
-        ftp = ftplib.FTP(self.parsedUrl.netloc)
-        ftp.login()
-        ftp.cwd(os.path.dirname(self.parsedUrl.path))
-        ftp.voidcmd('TYPE I')  # switch to binary mode
-        self.fileSize = ftp.size(self.basename)
-        return ftp
-
-    def _endFtp(self, ftp):
-        self._cleanUp()
-        ftp.quit()
-
-    def download(self):
-        self._printStartDownloadMessage()
-        ftp = self._beginFtp()
-        with open(self.path, 'wb') as localFile:
-            def callback(data):
-                self.bytesReceived += len(data)
-                self._updateDisplay(1000)
-                localFile.write(data)
-            ftp.retrbinary('RETR {}'.format(self.basename), callback)
-        self._updateDisplay()
-        self._endFtp(ftp)
 
 
 def runCommandSplits(splits, silent=False):
