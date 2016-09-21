@@ -25,6 +25,7 @@ import ga4gh.datamodel.sequence_annotations as sequence_annotations
 import ga4gh.datamodel.variants as variants
 import ga4gh.datarepo as datarepo
 import ga4gh.exceptions as exceptions
+import ga4gh.repo.rnaseq2ga as rnaseq2ga
 
 
 def getNameFromPath(filePath):
@@ -509,9 +510,34 @@ class RepoManager(object):
             self._args.rnaQuantificationSetName)
 
         def func():
-            self._updateRepo(self._repo.removeRnaQuantification, rnaQuantSet)
+            self._updateRepo(
+                self._repo.removeRnaQuantificationSet, rnaQuantSet)
         self._confirmDelete(
             "RnaQuantificationSet", rnaQuantSet.getLocalId(), func)
+
+    def addRnaQuantification(self):
+        """
+        Adds an rnaQuantification into this repo
+        """
+        self._openRepo()
+        dataset = self._repo.getDatasetByName(self._args.datasetName)
+        if self._args.name is None:
+            name = getNameFromPath(self._args.filePath)
+        else:
+            name = self._args.name
+        # TODO: programs not fully supported by GA4GH yet
+        programs = ""
+        featureType = "gene"
+        if self._args.transcript:
+            featureType = "transcript"
+        # TODO: change the pattern to match how the others are being added for
+        #  consistency
+        rnaseq2ga.rnaseq2ga(
+            self._args.quantificationFilePath, self._args.filePath, name,
+            self._args.format, dataset=dataset, featureType=featureType,
+            description=self._args.description, programs=programs,
+            annotationNames=self._args.featureSetName,
+            readGroupSetNames=self._args.readGroupSetName)
 
     #
     # Methods to simplify adding common arguments to the parser.
@@ -637,10 +663,26 @@ class RepoManager(object):
             "name", help="The name of the {}".format(objectType))
 
     @classmethod
-    def addRnaQuantificationNameArgument(cls, subparser):
+    def addRnaQuantificationSetNameArgument(cls, subparser):
         subparser.add_argument(
-            "rnaQuantificationName",
-            help="the name of the RNA Quantification")
+            "rnaQuantificationSetName",
+            help="the name of the RNA Quantification Set")
+
+    @classmethod
+    def addQuantificationFilePathArgument(cls, subparser, helpText):
+        subparser.add_argument(
+            "quantificationFilePath", help=helpText)
+
+    @classmethod
+    def addRnaFormatArgument(cls, subparser):
+        subparser.add_argument(
+            "format", help="format of the quantification input data")
+
+    @classmethod
+    def addRnaFeatureTypeOption(cls, subparser):
+        subparser.add_argument(
+            "-t", "--transcript", action="store_true", default=False,
+            help="sets the quantification type to transcript")
 
     @classmethod
     def addClassNameOption(cls, subparser, objectType):
@@ -908,7 +950,8 @@ class RepoManager(object):
             runner="removeRnaQuantificationSet")
         cls.addRepoArgument(removeRnaQuantificationSetParser)
         cls.addDatasetNameArgument(removeRnaQuantificationSetParser)
-        cls.addRnaQuantificationNameArgument(removeRnaQuantificationSetParser)
+        cls.addRnaQuantificationSetNameArgument(
+            removeRnaQuantificationSetParser)
         cls.addForceOption(removeRnaQuantificationSetParser)
 
         addPhenotypeAssociationSetParser = cli.addSubparser(
@@ -936,6 +979,26 @@ class RepoManager(object):
             removePhenotypeAssociationSetParser,
             "phenotype association set")
         cls.addForceOption(removePhenotypeAssociationSetParser)
+
+        objectType = "RnaQuantification"
+        addRnaQuantificationParser = cli.addSubparser(
+            subparsers, "add-rnaquantification",
+            "Add an RNA quantification to the data repo")
+        addRnaQuantificationParser.set_defaults(
+            runner="addRnaQuantification")
+        cls.addFilePathArgument(
+            addRnaQuantificationParser,
+            "The path to the RNA SQLite database to create or modify")
+        cls.addQuantificationFilePathArgument(
+            addRnaQuantificationParser, "The path to the expression file.")
+        cls.addRnaFormatArgument(addRnaQuantificationParser)
+        cls.addRepoArgument(addRnaQuantificationParser)
+        cls.addDatasetNameArgument(addRnaQuantificationParser)
+        cls.addFeatureSetNameArgument(addRnaQuantificationParser)
+        cls.addReadGroupSetNameArgument(addRnaQuantificationParser)
+        cls.addNameOption(addRnaQuantificationParser, "rna quantification")
+        cls.addDescriptionOption(addRnaQuantificationParser, objectType)
+        cls.addRnaFeatureTypeOption(addRnaQuantificationParser)
 
         return parser
 
