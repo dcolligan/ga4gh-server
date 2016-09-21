@@ -28,19 +28,36 @@ import ga4gh.exceptions as exceptions
 import ga4gh.repo.rnaseq2ga as rnaseq2ga
 
 
-def getNameFromPath(filePath):
+def getNameAndExtensionFromPath(filePath):
     """
-    Returns the filename of the specified path without its extensions.
-    This is usually how we derive the default name for a given object.
+    Returns the filename (without the extension) and the extension
+    of the given filePath.
     """
     if len(filePath) == 0:
         raise ValueError("Cannot have empty path for name")
     fileName = os.path.split(os.path.normpath(filePath))[1]
     # We need to handle things like .fa.gz, so we can't use
     # os.path.splitext
-    ret = fileName.split(".")[0]
-    assert ret != ""
-    return ret
+    splits = fileName.split(".")
+    name = splits[0]
+    assert name != ""
+    extension = '.'.join(splits[1:])
+    return name, extension
+
+
+def getNameFromPath(filePath):
+    """
+    Returns the filename of the specified path without its extensions.
+    This is usually how we derive the default name for a given object.
+    """
+    return getNameAndExtensionFromPath(filePath)[0]
+
+
+def getExtensionFromPath(filePath):
+    """
+    Returns the extension of the specified path
+    """
+    return getNameAndExtensionFromPath(filePath)[1]
 
 
 def getRawInput(display):
@@ -482,6 +499,15 @@ class RepoManager(object):
         """
         Adds an rnaQuantificationSet into this repo
         """
+        referenceSetName = self._args.referenceSetName
+        if referenceSetName is None:
+            raise exceptions.RepoManagerException(
+                "A reference set name must be provided")
+        extension = getExtensionFromPath(self._args.filePath)
+        if extension != 'db':
+            raise exceptions.RepoManagerException(
+                "A database file with a .db extension must be provided")
+
         self._openRepo()
         dataset = self._repo.getDatasetByName(self._args.datasetName)
         if self._args.name is None:
@@ -490,10 +516,6 @@ class RepoManager(object):
             name = self._args.name
         rnaQuantificationSet = rna_quantification.SqliteRnaQuantificationSet(
             dataset, name)
-        referenceSetName = self._args.referenceSetName
-        if referenceSetName is None:
-            raise exceptions.RepoManagerException(
-                "A reference set name must be provided")
         referenceSet = self._repo.getReferenceSetByName(referenceSetName)
         rnaQuantificationSet.setReferenceSet(referenceSet)
         rnaQuantificationSet.populateFromFile(self._args.filePath)
