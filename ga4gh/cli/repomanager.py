@@ -1008,19 +1008,21 @@ class RepoManager(object):
             "Add an RNA quantification to the data repo")
         addRnaQuantificationParser.set_defaults(
             runner="addRnaQuantification")
+        cls.addRepoArgument(addRnaQuantificationParser)
+        cls.addDatasetNameArgument(addRnaQuantificationParser)
         cls.addFilePathArgument(
             addRnaQuantificationParser,
             "The path to the RNA SQLite database to create or modify")
         cls.addQuantificationFilePathArgument(
             addRnaQuantificationParser, "The path to the expression file.")
         cls.addRnaFormatArgument(addRnaQuantificationParser)
-        cls.addRepoArgument(addRnaQuantificationParser)
-        cls.addDatasetNameArgument(addRnaQuantificationParser)
         cls.addFeatureSetNameArgument(addRnaQuantificationParser)
         cls.addReadGroupSetNameArgument(addRnaQuantificationParser)
         cls.addNameOption(addRnaQuantificationParser, "rna quantification")
         cls.addDescriptionOption(addRnaQuantificationParser, objectType)
         cls.addRnaFeatureTypeOption(addRnaQuantificationParser)
+
+        # TODO remove-rnaquantification
 
         return parser
 

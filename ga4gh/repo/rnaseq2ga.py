@@ -31,24 +31,24 @@ class RnaSqliteStore(object):
     def createTables(self, cursor):
         # annotationIds is a comma separated list
         cursor.execute('''CREATE TABLE RnaQuantification (
-                       id text,
-                       feature_set_ids text,
-                       description text,
-                       name text,
-                       read_group_ids text,
-                       programs text)''')
+                       id TEXT,
+                       feature_set_ids TEXT,
+                       description TEXT,
+                       name TEXT,
+                       read_group_ids TEXT,
+                       programs TEXT)''')
         cursor.execute('''CREATE TABLE Expression (
-                       id text,
-                       rna_quantification_id text,
-                       name text,
-                       feature_id text,
-                       expression real,
-                       is_normalized boolean,
-                       raw_read_count real,
-                       score real,
-                       units integer,
-                       conf_low real,
-                       conf_hi real)''')
+                       id TEXT,
+                       rna_quantification_id TEXT,
+                       name TEXT,
+                       feature_id TEXT,
+                       expression REAL,
+                       is_normalized BOOLEAN,
+                       raw_read_count REAL,
+                       score REAL,
+                       units INTEGER,
+                       conf_low REAL,
+                       conf_hi REAL)''')
 
     def addRnaQuantification(self, datafields):
         """

@@ -326,6 +326,23 @@ class TestRemoveRnaQuantificationSet(AbstractRepoManagerTest):
             self._removeRnaQuantificationSet(rnaQuantSetName="wrong")
 
 
+class TestAddRnaQuantification(AbstractRepoManagerTest):
+
+    def __init__(self):
+        super(TestAddRnaQuantification, self).setUp()
+        self.init()
+        self.addDataset()
+        self.addReferenceSet()
+        self.addRnaQuantificationSet()
+
+    def testDefaults(self):
+        pass  # TODO
+
+
+class TestRemoveRnaQuantification(AbstractRepoManagerTest):
+    pass  # TODO
+
+
 class TestAddDataset(AbstractRepoManagerTest):
 
     def setUp(self):
